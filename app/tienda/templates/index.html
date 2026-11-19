@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>SmartTech Store</title>
+<style>
+body{font-family:sans-serif;max-width:900px;margin:auto;padding:20px;background:#f4f6fb}
+h1{color:#1a3c8f}section{background:#fff;padding:16px;border-radius:10px;margin-bottom:16px}
+input,button{padding:8px;margin:4px}button{background:#1a3c8f;color:#fff;border:0;border-radius:6px;cursor:pointer}
+table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}
+</style></head><body>
+<h1>SmartTech Store</h1>
+<section><h3>Iniciar sesión</h3>
+<input id="u" placeholder="Usuario"><input id="p" type="password" placeholder="Contraseña">
+<button onclick="login()">Entrar</button> <span id="estado"></span></section>
+<section><h3>Productos</h3>
+<input id="nom" placeholder="Nombre"><input id="cat" placeholder="Categoría">
+<input id="pre" type="number" placeholder="Precio"><input id="sto" type="number" placeholder="Stock">
+<button onclick="crearProducto()">Agregar</button>
+<table><thead><tr><th>ID</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th></th></tr></thead><tbody id="prod"></tbody></table></section>
+<section><h3>Pedidos</h3><button onclick="cargarPedidos()">Ver mis pedidos</button><ul id="ped"></ul></section>
+<section><h3>Clasificar imagen (Hugging Face)</h3>
+<input type="file" id="img" accept="image/*"><button onclick="clasificar()">Analizar</button><div id="ia"></div></section>
+<script>
+let auth = null;
+const H = () => auth ? {'Authorization': 'Basic ' + auth, 'Content-Type': 'application/json'} : {'Content-Type': 'application/json'};
+function login(){ auth = btoa(u.value + ':' + p.value); estado.textContent = 'Sesión: ' + u.value; cargarPedidos(); }
+async function cargarProductos(){
+  const r = await fetch('/api/productos/'); const d = await r.json();
+  prod.innerHTML = d.map(x => `<tr><td>${x.id}</td><td>${x.nombre}</td><td>${x.categoria}</td><td>S/ ${x.precio}</td><td>${x.stock}</td>
+  <td><button onclick="pedir(${x.id})">Pedir</button> <button onclick="borrar(${x.id})">Eliminar</button></td></tr>`).join('');
+}
+async function crearProducto(){
+  const r = await fetch('/api/productos/', {method:'POST', headers:H(), body:JSON.stringify({nombre:nom.value, categoria:cat.value, precio:pre.value, stock:sto.value})});
+  if(!r.ok) alert('Solo un administrador puede agregar productos'); cargarProductos();
+}
+async function borrar(id){
+  const r = await fetch('/api/productos/' + id + '/', {method:'DELETE', headers:H()});
+  if(!r.ok) alert('Solo un administrador puede eliminar'); cargarProductos();
+}
+async function pedir(id){
+  const r = await fetch('/api/pedidos/', {method:'POST', headers:H(), body:JSON.stringify({producto:id, cantidad:1})});
+  if(!r.ok) alert('Inicia sesión para hacer pedidos'); cargarPedidos();
+}
+async function cargarPedidos(){
+  if(!auth) return; const r = await fetch('/api/pedidos/', {headers:H()}); if(!r.ok) return;
+  const d = await r.json(); ped.innerHTML = d.map(x => `<li>Pedido #${x.id} — producto ${x.producto} x${x.cantidad} — ${x.estado} (${x.cliente})</li>`).join('');
+}
+async function clasificar(){
+  const f = new FormData(); f.append('imagen', img.files[0]); ia.textContent = 'Analizando... (la primera vez descarga el modelo)';
+  const r = await fetch('/api/clasificar/', {method:'POST', body:f}); const d = await r.json();
+  ia.innerHTML = '<b>Resultados:</b><ul>' + d.resultados.map(x => `<li>${x.etiqueta}: ${x.confianza}%</li>`).join('') + '</ul>' +
+    '<b>Productos relacionados:</b><ul>' + (d.productos_relacionados.map(x => `<li>${x.nombre} — S/ ${x.precio}</li>`).join('') || '<li>Ninguno</li>') + '</ul>';
+}
+cargarProductos();
+</script></body></html>
